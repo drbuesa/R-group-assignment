@@ -2,6 +2,7 @@ library(data.table);
 library(ggplot2);
 
 #Load datasets 
+#Test GitHub
 
 folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
 
@@ -21,7 +22,7 @@ colnames(data)[1]
 
 colnames(data)[2:99]
 
-### Princpiapl components 
+### Principal components 
 
 colnames(data)[100:456]
 
