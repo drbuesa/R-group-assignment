@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1586202989411.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "5EE0763E",
+    "lastKnownWriteTime" : 1586366492,
+    "last_content_update" : 1586774627851,
+    "path" : "~/GitHub/R-group-assignment/R/eda.R",
+    "project_path" : "R/eda.R",
+    "properties" : {
+        "cursorPosition" : "23,12",
+        "scrollLine" : "8",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
