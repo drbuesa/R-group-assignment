@@ -2,7 +2,7 @@ library(data.table);
 library(ggplot2);
 
 #Load datasets 
-#Test GitHub
+### VANIA ###
 
 folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
 
