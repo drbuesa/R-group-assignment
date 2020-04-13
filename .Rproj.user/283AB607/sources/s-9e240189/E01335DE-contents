@@ -3,7 +3,6 @@ library(ggplot2);
 
 #Load datasets 
 
-
 folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
 
 data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
@@ -22,7 +21,7 @@ colnames(data)[1]
 
 colnames(data)[2:99]
 
-### Principal components
+### Princpiapl components 
 
 colnames(data)[100:456]
 

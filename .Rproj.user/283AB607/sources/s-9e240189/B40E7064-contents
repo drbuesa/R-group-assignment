@@ -22,7 +22,7 @@ colnames(data)[1]
 
 colnames(data)[2:99]
 
-### Principal components
+### Principal components 
 
 colnames(data)[100:456]
 
