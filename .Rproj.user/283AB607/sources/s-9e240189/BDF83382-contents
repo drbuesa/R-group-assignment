@@ -1,6 +1,14 @@
 library(data.table);
 library(ggplot2);
-
+library(dplyr);
+library(Amelia);
+library(mice);
+library(outliers);
+library(caret);
+library(skimr);
+library(devtools);
+library(visdat);
+library(DataExplorer);
 #Load datasets 
 
 
@@ -26,7 +34,7 @@ colnames(data)[2:99]
 
 colnames(data)[100:456]
 
-###▌ Last row with information 5113
+### Last row with information 5113
 which(data$Date == '20071231');
 
 #PCA Analysis 
@@ -87,10 +95,11 @@ ggplot(test, aes(x = PC1, y = ACME)) +
 
 #Density
 plot(density(test$ACME), col = "blue", main = "Density function ACME");
+plot(density(test$HOOK), col = "blue", main = "Density function HOOK");
 
 #Maps 
 install.packages("leaflet");
-install.packages("maps")
+install.packages("maps");
 library(leaflet);
 library(maps)
 mapStates = map("state", fill = TRUE, plot = FALSE)
