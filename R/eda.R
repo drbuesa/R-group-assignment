@@ -8,7 +8,6 @@ library(dplyr);
 install.packages("ggplot2");
 library(ggplot2);
 
-<<<<<<< HEAD
 install.packages("Amelia");
 library(Amelia);
 
@@ -26,10 +25,6 @@ library(leaflet);
 
 install.packages("maps");
 library(maps)
-=======
-#Load datasets 
-### VANIA ###
->>>>>>> e60b4c70bd51f715e28a94b4ba8bbad7c8349e46
 
 install.packages("skimr")
 library(skimr)
