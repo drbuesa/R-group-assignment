@@ -56,8 +56,9 @@ colnames(data)[100:456]
 which(data$Date == '20071231');
 
 #Validation technique to see if +90% of the data in the columns is unique.
-#In case of vars (additional_variables) it is found that there are columns that do not fulfill the condition of 
-#up to 90% unique values.
+#In case of vars (additional_variables) it is found that there are columns 
+#that do not fulfill the condition of up to 90% unique values
+
 constant_variables <- function(x,threshold=0.9){
   n_unique<- table(sapply(x,function(x){length(unique(x))>threshold*length(x)}));
   accepted<-identical(as.numeric(n_unique),as.numeric(ncol(x)))
@@ -96,11 +97,11 @@ as.numeric(sort(sapply(vars[,2:101], function(x){100*(sum(is.na(x)))/length(x)})
 # amount of values as zero exist. There are columns with up to 76% values as zero (column V4233)
 sort(sapply(vars[,2:101], function(x){100*(sum(x==0,na.rm = TRUE))/length(x)}),decreasing = TRUE)[1];
 
-#calculate the total % considering both conditions NAs and zero values. Up to 78% columns (column V2793)
+#calculate the total % considering both conditions NAs and zero values. Up to 78% (column V2793)
 sapply(vars[,2:101], function(x){100*(sum(x==0,na.rm = TRUE)+sum(is.na(x)))/length(x)});
 as.numeric(sort(sapply(vars[,2:101], function(x){100*(sum(is.na(x))+sum(x==0,na.rm = TRUE))/length(x)}),decreasing = TRUE))[1];
 
-#Lets do the same for rows/dates in the dataset.(team to think on what to do based on the result)
+#Lets do the same for rows/dates in the dataset
 apply(vars[,2:101],MARGIN=1, function(x){100*(sum(x==0,na.rm = TRUE)+sum(is.na(x)))/length(x)})
 as.numeric(sort(apply(vars[,2:101],MARGIN=1, function(x){100*(sum(x==0,na.rm = TRUE)+sum(is.na(x)))/length(x)}),decreasing = TRUE))[1];
 
