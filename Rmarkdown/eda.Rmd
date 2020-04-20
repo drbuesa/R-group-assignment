@@ -1,0 +1,95 @@
+---
+title: "**EDA - Solar Energy Prediction**"
+author: "GROUP F: ADDISON P., ALBERTO I., DANIEL R., FIDELIS M., VANIA C."
+date: "May 22nd 2020"
+output:
+  html_document:
+    fig_caption: yes
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    fig_caption: yes
+    keep_tex: yes
+    toc: yes
+---
+
+
+```{r, echo=FALSE}
+# htmltools::img(src =knitr::image_uri(file.path("/bigdata/utiles_sonia", ("logo_ie.jpg"))), alt = 'logo_ie.jpg', style = 'possition:absolute;left; width:450px;')
+```
+
+
+```{r, warning=FALSE, echo=FALSE}
+library(rmarkdown)
+library(knitr)
+opts_chunk$set(warning=FALSE, echo=FALSE, fig.width = 15)
+```
+
+
+```{r,results='hide'}
+library(data.table)
+library(ggplot2)
+library(leaflet)
+library(maps)
+
+########################## GLOBAL PATHS ##########################
+folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
+
+############################# GLOBAL QUERYS #############################
+data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
+station_info <- fread(file.path(folder_path, "station_info.csv"));
+add_variables <- readRDS(file.path(folder_path, "additional_variables.RData"));
+
+#Select Principal Components
+pc <- data[,100:456];
+
+# remove_variables <- c("var1", "var2","var3","var4")
+# dat <-  dat[,-remove_variables,with=F]
+```
+
+The dimension of Solar dataset is `r nrow(data)` x `r ncol(data)`.
+
+```{r,results="asis"}  
+########################## BEGIN MAIN ##########################
+cat("\n")
+cat("\n")
+cat("\n")
+
+cat("\n# **Solar Stations** ", "\n")
+
+mapStates = map("state", fill = TRUE, plot = FALSE)
+
+m <- leaflet(data = mapStates, width = 800, height = 400) %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  setView(-97.34, 35.54, zoom = 10) %>%
+  fitBounds(-104.00, 38.80, -94.00, 33.20) %>%
+  addPolygons(fillColor = topo.colors(10, alpha = NULL), stroke = FALSE) %>%
+  addCircles(data = station_info, lng = ~elon, lat = ~nlat, popup = ~stid, color = 'red');
+m 
+
+
+cat("\n# **Principal Components Analysis**", "\n")
+
+variance <- sapply(pc, var);
+prop_variance <- variance / sum(variance);
+
+ggplot(data.frame(prop_variance[1:9]),
+       aes(x = 1:9 , y = prop_variance[1:9])) +
+  geom_col(width = 0.7) +
+  geom_line(col = "blue") +
+  theme_bw() +
+  labs(x = "Principal Component",
+       y = "Percentage of Explained Variance")
+
+barplot(prop_variance)
+plot(prop_variance[1:10], type = "lines")
+
+prop_var_acum <- cumsum(prop_variance)
+which(prop_var_acum >= 0.8)[1] #Here we can add a slider to choose the threshold
+
+
+```
+
+
+
+
