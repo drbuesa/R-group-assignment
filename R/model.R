@@ -141,8 +141,6 @@ mae_test <- round(mean(as.matrix(abs(errors_test))), 5);
 
 library(randomForest);
 
-model <- sapply(train[, 2:3], randomForest, x = train[,100:106], data =train);
-
 model <- list()
 for (station in stationsNames){
   model[[station]] <- randomForest(y = train[[station]], x = train[,100:106], 
