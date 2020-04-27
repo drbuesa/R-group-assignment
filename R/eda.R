@@ -290,7 +290,11 @@ vars_no_null_clean_scaled <- as.data.frame(scale(vars_no_null_clean)) #Scaling t
 boxplot(vars_no_null_scaled) 
 boxplot(vars_no_null_clean_scaled) #option if we decide to remove outliers.
 
-#VANIA EDA ON STATIONS 
+#EDA on solar_dataset
 
+data2 <- data[1:5113,2:99] #excluding the date in the solar_dataset in which EDA will be performed
 
+t(sapply(data2, summary)) #performing EDA to the solar_dataset
+
+boxplot(data2) #boxplot 
 
