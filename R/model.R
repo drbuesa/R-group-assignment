@@ -143,7 +143,7 @@ library(randomForest);
 
 model <- list()
 for (station in stationsNames){
-  model[[station]] <- randomForest(y = train[[station]], x = train[,100:106], 
+  model[[station]] <- randomForest(y = train[, ..station], x = train[,PC1:PC7], 
                                    data = train)
 }
 
@@ -159,3 +159,62 @@ errors_test <- predictions_test - test[,2:99];
 
 mae_train <- round(mean(as.matrix(abs(errors_train))), 5); #1248521
 mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2775327
+
+
+############################# IMPROVE ACCURACY OF APPROACH 3 ############################
+
+
+# Find the most correlated stations
+
+correlations <- cor(data[, ..stationsNames])
+sort(correlations["KENT",]) #Chose KENT because it is easy to find closest stations in the map
+
+#Train a single model for KENT 
+predictors <- c(paste0("PC", seq(1,7)), "BOIS", "HOOK", "GOOD") #With more than 3 the model overfits
+
+model_kent <- randomForest(y = train[, KENT], x = train[, ..predictors], 
+                           data = train)
+
+predictions_kent <- predict(model_kent, newdata = test)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); #1169406
+mae_kent
+
+# Importance, geographical distance and correlation are the same 
+select_important(y = train$KENT, n_vars = 5, dat = train[, ..stationsNames][,-"KENT"])
+
+#SVM 
+library(e1071)
+formula <- paste0("KENT ~ ",paste0(predictors, collapse = " + ")); #NOT WORKING - Review synthax
+model_kent <- svm(formula, data = train, kernel = "radial")
+
+model_kent <- svm(KENT ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + BOIS + HOOK + GOOD, 
+             data = train, 
+             kernel="radial",
+             cost = 100, epsilon = 0.1, gamma = 0.0001); #1090740 with Grid Search **BEST
+
+#xgboost 
+library(xgboost)
+
+dtrain <- xgb.DMatrix(as.matrix(train[, ..predictors]), label = train[,KENT])
+dtest <- xgb.DMatrix(as.matrix(test[, ..predictors]), label = test[,KENT])
+
+w <- list(train = dtrain, test = dtest); #Watchlist
+
+xgb_kent1 <- xgb.train(data = dtrain, booster = 'gbtree', nrounds = 500, max_depth = 3,
+                       eval_metric = 'mae', eta = 0.05, watchlist = w,
+                       early_stopping_rounds = 30)
+#test-mae:1114932.000000 Can perform a Grid Search for nrounds, max_depth and eta
+
+
+xgb_kent2 <- xgb.train(data = dtrain, booster = 'gbtree', nrounds = 800, max_depth = 6,
+                       eval_metric = 'mae', eta = 0.1, watchlist = w,
+                       early_stopping_rounds = 30)
+#test-mae:1132313.250000
+
+predictions_kent <- predict(xgb_kent2, newdata = dtest)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); #1132313 
+mae_kent
+
+
