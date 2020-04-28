@@ -147,7 +147,7 @@ remove_redundant <- function(correlations,redundant_threshold){
 remove_irrelevant<-function(correlations,irrelevant_threshold, target){
   index <- which(target == colnames(correlations));
   
-  #Function for removal of irrelevant variables from dataset
+#Function for removal of irrelevant variables from dataset
   relevance<-correlations[index,-index];
   irrelevant_variables<-names(relevance)[is.na(relevance) | relevance<irrelevant_threshold];
   return(irrelevant_variables);
