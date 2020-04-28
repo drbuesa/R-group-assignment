@@ -25,6 +25,7 @@ set.seed(14);
 #Remove nulls
 data <- data_original[1:5113,] 
 
+
 #Add total sum of energy production in stations (only for total_energy model) ***NOT USE***
 data <- cbind(data, total = rowSums(data[,2:99]))
 
@@ -137,7 +138,7 @@ mae_test <- round(mean(as.matrix(abs(errors_test))), 5);
 
 ################# APPROACH 3 - MULTIPLE SINGLE TARGET MODELS #################################
 
-#Train 98 different models, pararellization and model optimization can be performed later 
+#Train 98 different models, pararellization can be performed later 
 
 library(randomForest);
 
@@ -184,14 +185,17 @@ mae_kent
 select_important(y = train$KENT, n_vars = 5, dat = train[, ..stationsNames][,-"KENT"])
 
 #SVM 
-library(e1071)
-formula <- paste0("KENT ~ ",paste0(predictors, collapse = " + ")); #NOT WORKING - Review synthax
-model_kent <- svm(formula, data = train, kernel = "radial")
 
-model_kent <- svm(KENT ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + BOIS + HOOK + GOOD, 
+library(e1071)
+model_kent <- svm(KENT ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + BOIS + GOOD + HOOK, 
              data = train, 
              kernel="radial",
              cost = 100, epsilon = 0.1, gamma = 0.0001); #1090740 with Grid Search **BEST
+
+predictions_kent <- predict(model_kent, newdata = test)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); 
+mae_kent
 
 #xgboost 
 library(xgboost)
@@ -206,15 +210,68 @@ xgb_kent1 <- xgb.train(data = dtrain, booster = 'gbtree', nrounds = 500, max_dep
                        early_stopping_rounds = 30)
 #test-mae:1114932.000000 Can perform a Grid Search for nrounds, max_depth and eta
 
-
-xgb_kent2 <- xgb.train(data = dtrain, booster = 'gbtree', nrounds = 800, max_depth = 6,
-                       eval_metric = 'mae', eta = 0.1, watchlist = w,
-                       early_stopping_rounds = 30)
-#test-mae:1132313.250000
-
-predictions_kent <- predict(xgb_kent2, newdata = dtest)
+predictions_kent <- predict(xgb_kent1, newdata = dtest)
 errors_kent <- predictions_kent - test$KENT
 mae_kent <- round(mean(abs(errors_kent)), 5); #1132313 
 mae_kent
 
 
+# Grip search for best model parameters (eta = 0.05, nrounds = 500, max_depth = 3)
+
+library(caret)
+
+dval <- xgb.DMatrix(as.matrix(val[, ..predictors]), label = val[,KENT])
+
+xgb_grid <- expand.grid(nrounds = c(500, 800), max_depth = c(3, 6, 8), 
+                        eta = c(0.05, 0.1, 0.12, 0.135, 0.15 ),
+                        gamma = 0,
+                        colsample_bytree = 1,
+                        min_child_weight =1,
+                        subsample = 0.3)
+
+tr_ctrl <- trainControl(method = 'repeatedcv', search = 'grid', number = 10, repeats = 5)
+
+xgb_train <- train(x = dval, y = val[ ,KENT], eval_metric = 'mae', trControl = tr_ctrl,
+                   maximize = F, method = 'xgbTree', tuneGrid = xgb_grid[1:7,])
+
+
+################# KAGGLE PREDICTIONS  - USE THE BEST MODEL #################################
+
+#Train 98 different models
+
+library(e1071);
+library(foreach)
+library(doParallel)
+
+# Start cluster
+stopImplicitCluster();
+registerDoParallel(cores = detectCores());
+
+model <- foreach(station = stationsNames, .packages = c("e1071", "data.table"))%dopar%{
+        svm(y = train[, ..station], x = train[, PC1:PC7], 
+        data = rbind(train, val), 
+        kernel="radial",
+        cost = 100, epsilon = 0.1, gamma = 0.0001);
+}
+
+#Get model predictions for multiple models (ST approach)
+#When not using formula svm expects newdata to have excatly the SAME PREDICTORS
+predictions_test <- sapply(model, predict, newdata = test[, PC1:PC7]); 
+
+#Get errors
+errors_test <- predictions_test - test[, ..stationsNames];
+
+#Compute Metric (MAE)
+
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2665900
+
+#Build the summision
+predictions <- data_original[5114:6909,]
+dim(predictions)
+
+predictions_kaggle <- as.data.table(sapply(model, predict, newdata = predictions[, PC1:PC7]))
+
+submission <- predictions[, Date:WYNO]
+predictions_kaggle -> submission[, 2:99]
+
+write.csv(submission, file = "./files/submission.csv", row.names = FALSE)
