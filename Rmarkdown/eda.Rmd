@@ -33,7 +33,7 @@ library(leaflet)
 library(maps)
 
 ########################## GLOBAL PATHS ##########################
-folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
+folder_path <- "../files/";
 
 ############################# GLOBAL QUERYS #############################
 data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
@@ -87,6 +87,13 @@ plot(prop_variance[1:10], type = "lines")
 prop_var_acum <- cumsum(prop_variance)
 which(prop_var_acum >= 0.8)[1] #Here we can add a slider to choose the threshold
 
+cat("\n# **Solar dataset analysis**", "\n")
+
+data2 <- data[1:5113,2:99] #excluding the date in the solar_dataset in which EDA will be performed
+
+## decide how to present the summary of the dataset
+
+boxplot(data2)
 
 ```
 
