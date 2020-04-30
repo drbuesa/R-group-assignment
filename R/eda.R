@@ -17,8 +17,9 @@ library(psych);
   
 
 #Load datasets 
-  
+
 folder_path <- "../project/files/";
+
 data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
 stations <- fread(file.path(folder_path, "station_info.csv"));
 additional_vars <- readRDS(file.path(folder_path, "additional_variables.RData"));
