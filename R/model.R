@@ -275,3 +275,31 @@ submission <- predictions[, Date:WYNO]
 predictions_kaggle -> submission[, 2:99]
 
 write.csv(submission, file = "./files/submission.csv", row.names = FALSE)
+
+
+
+###ADDISON 
+# ACME Create a Random Forest model with default parameters
+
+model2 <- randomForest(y = train[, ACME], x = train[,100:456], importance = TRUE)
+model2
+
+imp <- importance(model2)
+impvar <- rownames(imp)[order(imp[, 1], decreasing=TRUE)]
+
+varImpPlot(model2)
+
+predictors <- c("PC1","PC2","PC5","PC7","PC3","PC10","PC15","PC11","PC12","PC8","PC22","PC26","PC19",
+                "PC14","PC44")
+
+
+# Fine tuning parameters of Random Forest model
+
+
+model_acme <- randomForest(y = train[, ACME], x = train[, ..predictors], 
+                           data = train, ntree = 500, mtry = 11, importance = TRUE)
+
+predictions_acme <- predict(model_acme, newdata = test)
+errors_acme <- predictions_acme - test$ACME
+mae_acme <- round(mean(abs(errors_acme)), 5); #2482608
+mae_acme
