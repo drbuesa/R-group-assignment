@@ -33,29 +33,40 @@ library(leaflet)
 library(maps)
 
 ########################## GLOBAL PATHS ##########################
-folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/files/";
+folder_path <- "../files/";
 
 ############################# GLOBAL QUERYS #############################
 data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
-station_info <- fread(file.path(folder_path, "station_info.csv"));
-add_variables <- readRDS(file.path(folder_path, "additional_variables.RData"));
+stations <- fread(file.path(folder_path, "station_info.csv"));
+additional_vars <- readRDS(file.path(folder_path, "additional_variables.RData"));
+
+### Station names
+stationsNames <- colnames(data)[2:99]
+data <- data[1:5113,]
 
 #Select Principal Components
-pc <- data[,100:456];
+pc <- colnames(data)[100:456];
 
-# remove_variables <- c("var1", "var2","var3","var4")
-# dat <-  dat[,-remove_variables,with=F]
 ```
 
-The dimension of Solar dataset is `r nrow(data)` x `r ncol(data)`.
+## Solar dataset
+
+The dimension of Solar dataset is `r nrow(data)` x `r ncol(data)`. 
+
+First column is `r colnames(data)[1]` from `r as.Date(data$Date[1], format = "%Y%m%d")` to `r as.Date(data$Date[5113], format = "%Y%m%d")`. 
+
+Next `r length(stationsNames)` contain energy production in solar estations in units of Joules per square meter. 
+
+Finally, there are `r length(pc)` columns with Principal Components that can be used as predictors.
+
+
+
+**Location of the 98 Solar Stations**
+
+
+The followin map shows the location of the stations. 
 
 ```{r,results="asis"}  
-########################## BEGIN MAIN ##########################
-cat("\n")
-cat("\n")
-cat("\n")
-
-cat("\n# **Solar Stations** ", "\n")
 
 mapStates = map("state", fill = TRUE, plot = FALSE)
 
@@ -64,31 +75,60 @@ m <- leaflet(data = mapStates, width = 800, height = 400) %>%
   setView(-97.34, 35.54, zoom = 10) %>%
   fitBounds(-104.00, 38.80, -94.00, 33.20) %>%
   addPolygons(fillColor = topo.colors(10, alpha = NULL), stroke = FALSE) %>%
-  addCircles(data = station_info, lng = ~elon, lat = ~nlat, popup = ~stid, color = 'red');
+  addCircles(data = stations, lng = ~elon, lat = ~nlat, popup = ~stid, color = 'red');
 m 
+```
+
+Click the red dots to know the name of a particular station. 
 
 
-cat("\n# **Principal Components Analysis**", "\n")
+**Solar Stations Data**  
 
-variance <- sapply(pc, var);
-prop_variance <- variance / sum(variance);
+As the stations are close between them, their data are very similar. 
 
-ggplot(data.frame(prop_variance[1:9]),
-       aes(x = 1:9 , y = prop_variance[1:9])) +
+As an example, information about ACME station is shown:
+
+Summary
+
+```{r}
+summary(data[, ACME])
+```
+
+Number of missing values: 
+
+```{r}
+sum(is.na(data));
+```
+
+
+
+```{r}
+boxplot(data[, ACME], main = "Boxplot ACME");
+```
+
+
+```{r}
+plot(density(data$ACME), col = "blue", main = "Density function ACME")
+```
+
+## Principal Components Analysis
+
+```{r,results="asis"}
+
+variance <- sapply(data[, ..pc], var);
+prop_var <- variance / sum(variance);
+
+ggplot(data.frame(prop_var[1:10]),
+       aes(x = 1:10 , y = prop_var[1:10])) +
   geom_col(width = 0.7) +
   geom_line(col = "blue") +
   theme_bw() +
   labs(x = "Principal Component",
-       y = "Percentage of Explained Variance")
-
-barplot(prop_variance)
-plot(prop_variance[1:10], type = "lines")
-
-prop_var_acum <- cumsum(prop_variance)
-which(prop_var_acum >= 0.8)[1] #Here we can add a slider to choose the threshold
-
+       y = "Percentage of Explained Variance") +
+  scale_x_discrete(labels = paste0("PC", seq(1,10)), limits = c(1:10))
 
 ```
+
 
 
 
