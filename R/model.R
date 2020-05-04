@@ -279,27 +279,62 @@ write.csv(submission, file = "./files/submission.csv", row.names = FALSE)
 
 
 ###ADDISON 
+
+data <- data_original[1:5113,2:456] 
+
+#Add row indices for training data (70%)
+train_index <- sample(1:nrow(data), 0.7*nrow(data));  
+
+# row indices for validation data (15%)
+val_index <- sample(setdiff(1:nrow(data), train_index), 0.15*nrow(data));  
+
+# row indices for test data (15%)
+test_index <- setdiff(1:nrow(data), c(train_index, val_index));
+
+# split data
+train <- data[train_index]; 
+val <- data[val_index]; 
+test  <- data[test_index];
+
 # ACME Create a Random Forest model with default parameters
 
-model2 <- randomForest(y = train[, ACME], x = train[,100:456], importance = TRUE)
-model2
+set.seed(14)
+ACME_base <- randomForest(y = train[, ACME], x = train[,100:455], importance = TRUE)
 
-imp <- importance(model2)
+imp <- importance(ACME_base)
 impvar <- rownames(imp)[order(imp[, 1], decreasing=TRUE)]
 
-varImpPlot(model2)
+varImpPlot(ACME_base)
 
-predictors <- c("PC1","PC2","PC5","PC7","PC3","PC10","PC15","PC11","PC12","PC8","PC22","PC26","PC19",
+#Selecting the most important predictors based on impvar result
+
+ACME_vars <- c("ACME","PC1","PC2","PC5","PC7","PC3","PC10","PC15","PC11","PC12","PC8","PC22","PC26","PC19",
                 "PC14","PC44")
 
 
-# Fine tuning parameters of Random Forest model
+# Fine tuning parameters of Random Forest model (finding the best mtry)
 
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
+set.seed(14)
+tunegrid <- expand.grid(.mtry=c(1:15))
+rf_gridsearch <- train(ACME~., data=train[, ..ACME_vars], method="rf", metric = "MAE", 
+                       tuneGrid=tunegrid, trControl=control)
+print(rf_gridsearch)
+plot(rf_gridsearch)
 
-model_acme <- randomForest(y = train[, ACME], x = train[, ..predictors], 
-                           data = train, ntree = 500, mtry = 11, importance = TRUE)
+#Build Random Forest model based on the optimized mtry parameter.
+set.seed(14)
+model_acme <- randomForest(ACME~., data=train[, ..ACME_vars],
+                           ntree = 500, mtry = 12, importance = TRUE)
 
+set.seed(14)
 predictions_acme <- predict(model_acme, newdata = test)
 errors_acme <- predictions_acme - test$ACME
-mae_acme <- round(mean(abs(errors_acme)), 5); #2482608
+mae_acme <- round(mean(abs(errors_acme)), 5); #2464124
 mae_acme
+
+#APPLYING THE MODEL TO CORRELATED STATIONS
+#APAC MAE 2582086
+#CHIC MAE 2512803
+#NINN MAE 2542561
+#MINC MAE 2534828
