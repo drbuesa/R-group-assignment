@@ -84,16 +84,6 @@ Click the red dots to know the name of a particular station.
 
 **Solar Stations Data**  
 
-As the stations are close between them, their data are very similar. 
-
-As an example, information about ACME station is shown:
-
-Summary
-
-```{r}
-summary(data[, ACME])
-```
-
 Number of missing values: 
 
 ```{r}
@@ -101,17 +91,42 @@ sum(is.na(data));
 ```
 
 
+As the stations are close between them, their data are very similar. 
 
 ```{r}
-boxplot(data[, ACME], main = "Boxplot ACME");
+boxplot(data[, ..stationsNames], main = "Boxplot for the 98 stations") #boxplot 
 ```
 
+There is a station between HOOK and LAHO that seems to have an unexpected high value, let´s see
+which it is:
+
+```{r}
+boxplot(data[, HOOK:LAHO], main = "Boxplot from HOOK to LAHO") #boxplot 
+```
+
+ACME and IDAB are used as examples to analize stations data:
+
+Summary
+
+```{r}
+summary(data[, .(ACME, IDAB)])
+```
+
+Density function to see how often a particular energy value appears:
 
 ```{r}
 plot(density(data$ACME), col = "blue", main = "Density function ACME")
+plot(density(data$IDAB), col = "red", main = "Density function IDAB")
+
+ggplot() + 
+geom_density(aes(x = data[,ACME]), colour = "blue", show.legend = TRUE) +
+geom_density(aes(x= data[, IDAB]), colour = "red", show.legend = TRUE) +
+labs(x = "Energy (joules per squared meter)", y = "Frecuency") +
+theme_bw()  
+  
 ```
 
-## Principal Components Analysis
+**Principal Components Analysis**
 
 ```{r,results="asis"}
 
