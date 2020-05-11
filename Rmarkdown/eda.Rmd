@@ -61,7 +61,7 @@ Finally, there are `r length(pc)` columns with Principal Components that can be 
 
 
 
-**Location of the 98 Solar Stations**
+### Location of the 98 Solar Stations
 
 
 The followin map shows the location of the stations. 
@@ -82,7 +82,7 @@ m
 Click the red dots to know the name of a particular station. 
 
 
-**Solar Stations Data**  
+### Solar Stations Data  
 
 Number of missing values: 
 
@@ -119,27 +119,28 @@ plot(density(data$ACME), col = "blue", main = "Density function ACME")
 plot(density(data$IDAB), col = "red", main = "Density function IDAB")
 
 ggplot() + 
-geom_density(aes(x = data[,ACME]), colour = "blue", show.legend = TRUE) +
-geom_density(aes(x= data[, IDAB]), colour = "red", show.legend = TRUE) +
+geom_density(aes(x = data[,ACME]), colour = "blue") +
+geom_density(aes(x= data[, IDAB]), colour = "red") +
 labs(x = "Energy (joules per squared meter)", y = "Frecuency") +
 theme_bw()  
   
 ```
 
-**Principal Components Analysis**
+### Principal Components Analysis
 
 ```{r,results="asis"}
 
 variance <- sapply(data[, ..pc], var);
 prop_var <- variance / sum(variance);
+prop_var_acum <- cumsum(prop_var);
 
-ggplot(data.frame(prop_var[1:10]),
-       aes(x = 1:10 , y = prop_var[1:10])) +
-  geom_col(width = 0.7) +
-  geom_line(col = "blue") +
+ggplot() +
+  geom_col(aes(x = 1:10 , y = prop_var[1:10]), width = 0.7) +
+  geom_line(aes(x = 1:10 , y = prop_var_acum[1:10]), col = "blue") +
   theme_bw() +
-  labs(x = "Principal Component",
-       y = "Percentage of Explained Variance") +
+  guides(colour = guide_legend(override.aes = list(size=3))) +
+  labs(x = "Principal Component", y = "Percentage of Explained Variance") +
   scale_x_discrete(labels = paste0("PC", seq(1,10)), limits = c(1:10))
 
 ```
+80% of the variance is explained by the first `r which(prop_var_acum >= 0.8)[1]` Principal Components

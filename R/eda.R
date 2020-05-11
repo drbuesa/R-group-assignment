@@ -1,37 +1,18 @@
 # Packages installation
 #install.packages(
   c("data.table", "dplyr", "ggplot2", "Amelia", "mice", "outliers", 
-    "caret", "leaflet", "maps", "skimr", "psych"));
+    "caret", "leaflet", "maps", "skimr", "psych");
 
 library(data.table);
 library(dplyr);
 library(ggplot2);
-<<<<<<< HEAD
-
-install.packages("Amelia");
-=======
->>>>>>> 57e820705b9f040ef42c00312c18ab13dff803f5
 library(Amelia);
 library(mice);
 library(outliers);
 library(caret);
 library(leaflet);
-<<<<<<< HEAD
-
-install.packages("maps");
 library(maps)
-
-install.packages("skimr")
 library(skimr)
-
-install.packages("PerformanceAnalytics")
-library("PerformanceAnalytics")
-=======
-library(maps);
-library(skimr);
-library(psych);
-  
->>>>>>> 57e820705b9f040ef42c00312c18ab13dff803f5
 
 #Load datasets 
 
@@ -84,19 +65,19 @@ m
 
 variance <- sapply(data[, ..pc], var);
 prop_var <- variance / sum(variance);
+#80% of the Variance is explained with the first 10 PCAs
+prop_var_acum <- cumsum(prop_var);
+which(prop_var_acum >= 0.8)[1];
 
-ggplot(data.frame(prop_var[1:10]),
-       aes(x = 1:10 , y = prop_var[1:10])) +
-  geom_col(width = 0.7) +
-  geom_line(col = "blue") +
+ggplot() +
+  geom_col(aes(x = 1:10 , y = prop_var[1:10]), width = 0.7) +
+  geom_line(aes(x = 1:10 , y = prop_var_acum[1:10]), col = "blue") +
   theme_bw() +
-  labs(x = "Principal Component",
-       y = "Percentage of Explained Variance") +
+  guides(colour = guide_legend(override.aes = list(size=3))) +
+  labs(x = "Principal Component", y = "Percentage of Explained Variance") +
   scale_x_discrete(labels = paste0("PC", seq(1,10)), limits = c(1:10))
 
-#80% of the Variance is explained with the first 10 PCAs
-prop_var_acum <- cumsum(prop_var)
-which(prop_var_acum >= 0.8)[1] #Here we can add a slider to choose the threshold
+
 
 #Important variables. Dimensionality reduction is commonly performed in machine learning projects for 
 #computational and/or model accuracy optimization.
@@ -207,6 +188,11 @@ summary(vars_cleansed_amelia)
 
 
 outlier(vars_cleansed_amelia) #Q-Q plot of mahalanobis values versus the quantiles of the 100 columns from psych package
+
+install.packages("PerformanceAnalytics")
+library("PerformanceAnalytics")
+
+
 
 #calculation of mahalanobis 
 MD <- mahalanobis(vars_cleansed_amelia[, -"Date"], colMeans(vars_cleansed_amelia[, -"Date"]), cov(vars_cleansed_amelia[, -"Date"])) 
