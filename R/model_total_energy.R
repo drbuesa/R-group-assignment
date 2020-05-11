@@ -1,3 +1,245 @@
+library(data.table);
+
+
+#Load datasets 
+
+
+folder_path <- "./files/";
+
+data_original <- readRDS(file.path(folder_path, "solar_dataset.RData"));
+stations <- fread(file.path(folder_path, "station_info.csv"));
+
+dim(data_original)
+dim(stations)
+
+colnames(data)[1] ### Date 
+
+stationsNames <- colnames(data_original)[2:99] ### Station names
+
+colnames(data)[100:456] ### Principal components
+
+which(data$Date == '20071231'); ### Last row with information 5113
+
+set.seed(14); 
+
+#Remove nulls
+data <- data_original[1:5113,] 
+
+
+#Add total sum of energy production in stations (only for total_energy model) ***NOT USE***
+data <- cbind(data, total = rowSums(data[,2:99]))
+
+#Add row indices for training data (70%)
+train_index <- sample(1:nrow(data), 0.7*nrow(data));  
+
+# row indices for validation data (15%)
+val_index <- sample(setdiff(1:nrow(data), train_index), 0.15*nrow(data));  
+
+# row indices for test data (15%)
+test_index <- setdiff(1:nrow(data), c(train_index, val_index));
+
+# split data
+train <- data[train_index]; 
+val <- data[val_index]; 
+test  <- data[test_index];
+
+######################### APPROACH 1 - CLUSTERING OF STATIONS #################################
+
+head(stations)
+
+#### Clusters using geographical info in Stations ### *** NOT USED ***
+
+normStations <- scale(stations[,2:4])
+
+#Perform a number of clusters K = 98 / 2
+totalwss <- c()
+for (k in 1:(nrow(normStations)/2)){
+  result <- kmeans(normStations, k)  
+  totalwss <- c(totalwss, result$tot.withinss)
+}
+
+#Decide the right number of clusters 
+plot(totalwss[1:10], type = "line")
+
+
+#### Clusters using energy production in the Stations ### 
+
+normSolar <- scale(data[,2:99])
+normSolar_transpose <- as.data.frame(t(as.matrix(normSolar)))
+
+#Perform a number of clusters K = 20
+totalwss <- c()
+for (k in 1:20){
+  result <- kmeans(normSolar_transpose, k)  
+  totalwss <- c(totalwss, result$tot.withinss)
+}
+
+#Plot to decide the optimum number of clusters 
+plot(totalwss[1:15], type = "line")
+numcl <- 8
+
+#Perform final clustering with the optimum number k
+cl_geo <- kmeans(normStations, 4)
+cl_ene <- kmeans(normSolar_transpose, numcl)
+
+#Extract the clusters results to a list
+clusters <- list()
+for (i in 1:numcl){
+  clusters[[i]] <- names(cl_ene$cluster)[cl_ene$cluster == i]
+}
+
+
+#Important variables analysis per cluster
+
+library(caret);
+
+select_important<-function(y, n_vars, dat){
+  varimp <- filterVarImp(x = dat, y=y, nonpara=TRUE);
+  varimp <- data.table(variable=rownames(varimp),imp=varimp[, 1]);
+  varimp <- varimp[order(-imp)];
+  selected <- varimp$variable[1:n_vars];
+  return(selected);
+}
+
+select <- unlist(clusters[3])
+pc <- sapply(train[, ..select], select_important, n_vars = 5, dat = train[,100:109])
+sort(table(pc), decreasing = TRUE)
+
+
+
+############################### APPROACH 2 - TOTAL PRODUCTION #################################
+
+# 1) Predict total energy using model_total_energy
+
+# 2) Calculate weights matrix using train and val 
+
+weights <- rbind(train, val)
+
+weights <- weights[,2:99] / weights$total
+mean_weights <- as.data.table(sapply(weights, mean))
+mean_weights <- transpose(mean_weights)
+colnames(mean_weights) <- stationsNames
+
+#Split the prediction for total energy among the stations based on their weights
+
+predictions_test_w <- data.table()
+
+for (i in 1:length(predictions_test)){
+  predictions_test_w <- rbind(predictions_test_w, predictions_test[i] * mean_weights)
+}
+
+#Get errors
+errors_train <- predictions_train - train[,2:99];
+errors_test <- predictions_test_w - test[,2:99];
+#Compute Metric (MAE)
+
+mae_train <- round(mean(as.matrix(abs(errors_train))), 5);
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5);
+
+################# APPROACH 3 - MULTIPLE SINGLE TARGET MODELS #################################
+
+#Train 98 different models, pararellization can be performed later 
+
+library(randomForest);
+
+model <- list()
+for (station in stationsNames){
+  model[[station]] <- randomForest(y = train[, ..station], x = train[,PC1:PC7], 
+                                   data = train)
+}
+
+#Get model predictions for multiple models (ST approach)
+predictions_train <- predict(model[[1]], newdata = train); #Only one model 
+predictions_train <- sapply(model, predict, newdata = train); #All models at the same time
+predictions_test <- sapply(model, predict, newdata = test);
+
+#Get errors
+errors_train <- predictions_train - train[,2:99];
+errors_test <- predictions_test - test[,2:99];
+#Compute Metric (MAE)
+
+mae_train <- round(mean(as.matrix(abs(errors_train))), 5); #1248521
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2775327
+
+
+############################# IMPROVE ACCURACY OF APPROACH 3 ############################
+
+
+# Find the most correlated stations
+
+correlations <- cor(data[, ..stationsNames])
+sort(correlations["KENT",]) #Chose KENT because it is easy to find closest stations in the map
+
+#Train a single model for KENT 
+predictors <- c(paste0("PC", seq(1,7)), "BOIS", "HOOK", "GOOD") #With more than 3 the model overfits
+
+model_kent <- randomForest(y = train[, KENT], x = train[, ..predictors], 
+                           data = train)
+
+predictions_kent <- predict(model_kent, newdata = test)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); #1169406
+mae_kent
+
+# Importance, geographical distance and correlation are the same 
+select_important(y = train$KENT, n_vars = 5, dat = train[, ..stationsNames][,-"KENT"])
+
+#SVM 
+
+library(e1071)
+model_kent <- svm(KENT ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + BOIS + GOOD + HOOK, 
+             data = train, 
+             kernel="radial",
+             cost = 100, epsilon = 0.1, gamma = 0.0001); #1090740 with Grid Search **BEST
+
+predictions_kent <- predict(model_kent, newdata = test)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); 
+mae_kent
+
+#xgboost 
+library(xgboost)
+
+dtrain <- xgb.DMatrix(as.matrix(train[, ..predictors]), label = train[,KENT])
+dtest <- xgb.DMatrix(as.matrix(test[, ..predictors]), label = test[,KENT])
+
+w <- list(train = dtrain, test = dtest); #Watchlist
+
+xgb_kent1 <- xgb.train(data = dtrain, booster = 'gbtree', nrounds = 500, max_depth = 3,
+                       eval_metric = 'mae', eta = 0.05, watchlist = w,
+                       early_stopping_rounds = 30)
+#test-mae:1114932.000000 Can perform a Grid Search for nrounds, max_depth and eta
+
+predictions_kent <- predict(xgb_kent1, newdata = dtest)
+errors_kent <- predictions_kent - test$KENT
+mae_kent <- round(mean(abs(errors_kent)), 5); #1132313 
+mae_kent
+
+
+# Grip search for best model parameters (eta = 0.05, nrounds = 500, max_depth = 3)
+
+library(caret)
+
+dval <- xgb.DMatrix(as.matrix(val[, ..predictors]), label = val[,KENT])
+
+xgb_grid <- expand.grid(nrounds = c(500, 800), max_depth = c(3, 6, 8), 
+                        eta = c(0.05, 0.1, 0.12, 0.135, 0.15 ),
+                        gamma = 0,
+                        colsample_bytree = 1,
+                        min_child_weight =1,
+                        subsample = 0.3)
+
+tr_ctrl <- trainControl(method = 'repeatedcv', search = 'grid', number = 10, repeats = 5)
+
+xgb_train <- train(x = dval, y = val[ ,KENT], eval_metric = 'mae', trControl = tr_ctrl,
+                   maximize = F, method = 'xgbTree', tuneGrid = xgb_grid[1:7,])
+
+
+################# KAGGLE PREDICTIONS  - USE THE BEST MODEL #################################
+
+#Train 98 different models
+
+library(e1071);
 library(foreach)
 library(doParallel)
 
@@ -5,62 +247,94 @@ library(doParallel)
 stopImplicitCluster();
 registerDoParallel(cores = detectCores());
 
-### Define grid
-c_values <- 10^seq(from = 1, to = 3, by = 0.5);
-eps_values <- 10^seq(from = -2, to = 0, by = 0.5);
-gamma_values <- 10^seq(from = -5, to = -3, by = 0.5);
+model <- foreach(station = stationsNames, .packages = c("e1071", "data.table"))%dopar%{
+        svm(y = train[, ..station], x = train[, PC1:PC7], 
+        data = rbind(train, val), 
+        kernel="radial",
+        cost = 100, epsilon = 0.1, gamma = 0.0001);
+}
 
-### Compute grid search
-grid_results <-  foreach (c = c_values, .combine = rbind)%:%
-  foreach (eps = eps_values, .combine = rbind)%:%
-  foreach (gamma = gamma_values, .packages = c("e1071", "data.table"), .combine = rbind)%dopar%{
-    print(sprintf("Start of c = %s - eps = %s - gamma = %s", c, eps, gamma));
-    
-    # train SVM model with a particular set of hyperparamets
-    model <- svm(total ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7, 
-                 data = train, 
-                 kernel="radial",
-                 cost = c, epsilon = eps, gamma = gamma);
-    
-    # Get model predictions
-    predictions_train <- predict(model, newdata = train);
-    predictions_val <- predict(model, newdata = val);
-    
-    # Get errors
-    errors_train <- predictions_train - train$total;
-    errors_val <- predictions_val - val$total;
-    
-    # Compute Metrics
-    mae_train <- round(mean(abs(errors_train)), 5)
-    mae_val <- round(mean(abs(errors_val)), 5)
-    
-    # Build comparison table
-    data.table(c = c, eps = eps, gamma = gamma, 
-               mae_train = mae_train,
-               mae_val = mae_val);
-  }
+#Get model predictions for multiple models (ST approach)
+#When not using formula svm expects newdata to have excatly the SAME PREDICTORS
+predictions_test <- sapply(model, predict, newdata = test[, PC1:PC7]); 
 
-# Order results by increasing mse and mae
-grid_results <- grid_results[order(mae_val, mae_train)];
+#Get errors
+errors_test <- predictions_test - test[, ..stationsNames];
 
-# Check results
-best <- grid_results[1];
+#Compute Metric (MAE)
 
-### Train final model
-# train SVM model with best found set of hyperparamets
-model <- svm(total ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7, 
-             data = rbind(train, val), 
-             kernel="radial",
-             cost = best$c, epsilon = best$eps, gamma = best$gamma);
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2665900
 
-# Get model predictions
-predictions_test <- predict(model, newdata = test);
+#Build the summision
+predictions <- data_original[5114:6909,]
+dim(predictions)
 
-# Get errors
-errors_test <- predictions_test - test$total;
+predictions_kaggle <- as.data.table(sapply(model, predict, newdata = predictions[, PC1:PC7]))
 
-# Compute Metrics
-mae_test <- round(mean(abs(errors_test)), 5)
+submission <- predictions[, Date:WYNO]
+predictions_kaggle -> submission[, 2:99]
 
-## Summary
-print(sprintf("MAE_test = %s", mae_test));
+write.csv(submission, file = "./files/submission.csv", row.names = FALSE)
+
+
+
+###ADDISON 
+
+data <- data_original[1:5113,2:456] 
+
+#Add row indices for training data (70%)
+train_index <- sample(1:nrow(data), 0.7*nrow(data));  
+
+# row indices for validation data (15%)
+val_index <- sample(setdiff(1:nrow(data), train_index), 0.15*nrow(data));  
+
+# row indices for test data (15%)
+test_index <- setdiff(1:nrow(data), c(train_index, val_index));
+
+# split data
+train <- data[train_index]; 
+val <- data[val_index]; 
+test  <- data[test_index];
+
+# ACME Create a Random Forest model with default parameters
+
+set.seed(14)
+ACME_base <- randomForest(y = train[, ACME], x = train[,100:455], importance = TRUE)
+
+imp <- importance(ACME_base)
+impvar <- rownames(imp)[order(imp[, 1], decreasing=TRUE)]
+
+varImpPlot(ACME_base)
+
+#Selecting the most important predictors based on impvar result
+
+ACME_vars <- c("ACME","PC1","PC2","PC5","PC7","PC3","PC10","PC15","PC11","PC12","PC8","PC22","PC26","PC19",
+                "PC14","PC44")
+
+
+# Fine tuning parameters of Random Forest model (finding the best mtry)
+
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
+set.seed(14)
+tunegrid <- expand.grid(.mtry=c(1:15))
+rf_gridsearch <- train(ACME~., data=train[, ..ACME_vars], method="rf", metric = "MAE", 
+                       tuneGrid=tunegrid, trControl=control)
+print(rf_gridsearch)
+plot(rf_gridsearch)
+
+#Build Random Forest model based on the optimized mtry parameter.
+set.seed(14)
+model_acme <- randomForest(ACME~., data=train[, ..ACME_vars],
+                           ntree = 500, mtry = 12, importance = TRUE)
+
+set.seed(14)
+predictions_acme <- predict(model_acme, newdata = test)
+errors_acme <- predictions_acme - test$ACME
+mae_acme <- round(mean(abs(errors_acme)), 5); #2464124
+mae_acme
+
+#APPLYING THE MODEL TO CORRELATED STATIONS
+#APAC MAE 2582086
+#CHIC MAE 2512803
+#NINN MAE 2542561
+#MINC MAE 2534828
