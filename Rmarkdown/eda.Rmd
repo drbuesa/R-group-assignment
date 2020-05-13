@@ -22,6 +22,9 @@ output:
 ```{r, warning=FALSE, echo=FALSE}
 library(rmarkdown)
 library(knitr)
+library(data.table)
+library(Amelia)
+library(skimr)
 opts_chunk$set(warning=FALSE, echo=FALSE, fig.width = 15)
 ```
 
@@ -144,3 +147,23 @@ ggplot() +
 
 ```
 80% of the variance is explained by the first `r which(prop_var_acum >= 0.8)[1]` Principal Components
+
+### Additional Variables Analysis
+
+Total missing values in Additional variables dataset are `r sum(is.na(additional_vars[, -"Date"]))`
+
+```{r}
+max(sapply(additional_vars[,-"Date"], function(x){100 * (sum(is.na(x))) / length(x)}));
+```
+
+Up to 7% NAs exist for additional_vars (additional_variables dataset)
+
+```{r}
+missmap(additional_vars);
+```
+
+Additional variables have skwed distributions with more that 75% of values = 0 and many sparse outliers:
+```{r}
+plot(density(additional_vars$V649, na.rm = TRUE), col = "blue", main = "Density function example")
+```
+That is why the team decided not to use any of these additional variables for the Machine Learning model.
