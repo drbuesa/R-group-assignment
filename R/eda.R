@@ -1,7 +1,7 @@
 # Packages installation
 #install.packages(
   c("data.table", "dplyr", "ggplot2", "Amelia", "mice", "outliers", 
-    "caret", "leaflet", "maps", "skimr", "psych");
+    "caret", "leaflet", "maps", "skimr");
 
 library(data.table);
 library(dplyr);
@@ -16,7 +16,7 @@ library(skimr)
 
 #Load datasets 
 
-folder_path <- "../project/files/";
+folder_path <- "./files/";
 
 data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
 stations <- fread(file.path(folder_path, "station_info.csv"));
@@ -38,6 +38,7 @@ pc <- colnames(data)[100:456]
 
 ### Last row with information 5113
 which(data$Date == '20071231');
+data <- cbind(data, month = as.numeric(sapply(data$Date, substr, 5,6)));
 data <- data[1:5113,]
 
 ###################################### ANALYSIS ON SOLAR DATASET ######################################
@@ -48,8 +49,20 @@ summary(data[, ..stationsNames])
 sum(is.na(data))
 boxplot(data[, ..stationsNames]) #boxplot 
 
-#Density
-plot(density(data$WOOD), col = "blue", main = "Density function ACME");
+#Plots by solar station 
+plot(density(data$ACME), col = "blue", main = "Density function ACME");
+plot(data$ACME, col = "blue", main = "ACME", type = "line"); #Clear seasonality per year
+
+#Zoom on year 1994 as an example
+ggplot(data[Date %in% "19940101":"19941231"]) +
+  geom_point(aes(x = month, y = ACME, color = month)) +
+  theme_bw() +
+  labs(x = "Month of the year", y = "Solar Station Production")+
+  scale_x_discrete(labels = 1:12, limits = c(1:12))+
+  scale_color_gradient2(midpoint=6, low="blue", mid="orange",
+                        high="blue")
+
+
 
 #Maps 
 mapStates = map("state", fill = TRUE, plot = FALSE)
@@ -73,7 +86,6 @@ ggplot() +
   geom_col(aes(x = 1:10 , y = prop_var[1:10]), width = 0.7) +
   geom_line(aes(x = 1:10 , y = prop_var_acum[1:10]), col = "blue") +
   theme_bw() +
-  guides(colour = guide_legend(override.aes = list(size=3))) +
   labs(x = "Principal Component", y = "Percentage of Explained Variance") +
   scale_x_discrete(labels = paste0("PC", seq(1,10)), limits = c(1:10))
 

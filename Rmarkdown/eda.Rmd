@@ -14,26 +14,19 @@ output:
 ---
 
 
-```{r, echo=FALSE}
-# htmltools::img(src =knitr::image_uri(file.path("/bigdata/utiles_sonia", ("logo_ie.jpg"))), alt = 'logo_ie.jpg', style = 'possition:absolute;left; width:450px;')
-```
-
-
-```{r, warning=FALSE, echo=FALSE}
+```{r, warning=FALSE, echo=FALSE, results='hide'}
 library(rmarkdown)
 library(knitr)
 library(data.table)
+library(ggplot2)
+library(leaflet)
+library(maps)
 library(Amelia)
-library(skimr)
 opts_chunk$set(warning=FALSE, echo=FALSE, fig.width = 15)
 ```
 
 
 ```{r,results='hide'}
-library(data.table)
-library(ggplot2)
-library(leaflet)
-library(maps)
 
 ########################## GLOBAL PATHS ##########################
 folder_path <- "../files/";
@@ -45,6 +38,7 @@ additional_vars <- readRDS(file.path(folder_path, "additional_variables.RData"))
 
 ### Station names
 stationsNames <- colnames(data)[2:99]
+data <- cbind(data, month = as.numeric(sapply(data$Date, substr, 5,6)));
 data <- data[1:5113,]
 
 #Select Principal Components
@@ -67,7 +61,7 @@ Finally, there are `r length(pc)` columns with Principal Components that can be 
 ### Location of the 98 Solar Stations
 
 
-The followin map shows the location of the stations. 
+The following map shows the location of the stations. 
 
 ```{r,results="asis"}  
 
@@ -129,6 +123,31 @@ theme_bw()
   
 ```
 
+If we plot all the data from a Solar Station we can see the seasonality of energy production: 
+
+```{r}
+ggplot(data) +
+geom_line(aes(x = Date, y = ACME, group = 1), color = "orange") +
+theme_bw() +
+theme(axis.text.x = element_blank()) +
+labs(x = "Years 1994 to 2007", y = "Solar Station Production")
+``` 
+
+If we zoom in a year we can see the following pattern: 
+
+```{r}
+ggplot(data[Date %in% "19940101":"19941231"]) +
+  geom_point(aes(x = month, y = ACME, color = month)) +
+  theme_bw() +
+  labs(x = "Month of the year - 1994", y = "Solar Station Production")+
+  scale_x_discrete(labels = 1:12, limits = c(1:12))+
+  scale_color_gradient2(midpoint=6, low="blue", mid="orange",
+                        high="blue")
+```
+The mean of the energy production in the month of May from 1994 to 2007 has been: 
+`r formatC(mean(as.matrix(data[month == 5, ACME:WYNO])), format = "e", digits = 2)` while in the month of December it has been: 
+`r formatC(mean(as.matrix(data[month == 12, ACME:WYNO])), format = "e", digits = 2)`.
+
 ### Principal Components Analysis
 
 ```{r,results="asis"}
@@ -166,4 +185,4 @@ Additional variables have skwed distributions with more that 75% of values = 0 a
 ```{r}
 plot(density(additional_vars$V649, na.rm = TRUE), col = "blue", main = "Density function example")
 ```
-That is why the team decided not to use any of these additional variables for the Machine Learning model.
+This is why the team decided not to use any of these additional variables for the Machine Learning model.
