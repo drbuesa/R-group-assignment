@@ -1,11 +1,10 @@
 ######################### 1) LOAD DATA INTO MEMORY #################################
 
 library(data.table);
+library(apcluster);
 library(caret);
-library(ggplot2);
 library(foreach);
 library(doParallel);
-
 
 #Load datasets 
 
@@ -22,16 +21,9 @@ colnames(data)[1] ### Date
 stationsNames <- colnames(data_original)[2:99] ### Station names
 colnames(data)[100:456] ### Principal components
 
-
-#Check last row with information 5113
-which(data$Date == '20071231'); 
-
-#Add month of year as a new column and retain until PC110
-data_original <- cbind(data_original[, Date:WYNO], 
-                       month = as.numeric(sapply(data_original$Date, substr, 5,6)),
-                       data_original[, PC1:PC110]);
-
 #Remove NA rows to be predicted
+
+which(data$Date == '20071231'); ### Last row with information 5113
 data <- data_original[1:5113,] 
 
 # Set seed to get reproducible results
@@ -66,14 +58,10 @@ select_important<-function(y, n_vars, dat){
 
 # Grid Search Clusters SVM 
 
-grid_search <- function(cluster, predictors,
+grid_search <- function(cluster, predictors, base_station,
                         c_values = 10^seq(from = 1, to = 3, by = 0.5),
                         eps_values = 10^seq(from = -2, to = 0, by = 0.5), 
                         gamma_values = 10^seq(from = -5, to = -3, by = 0.5)){
-
-# Select the base_station as the most correlated one in the cluster
-total_cor_stations <- colSums(cor(train[, ..cluster]))
-base_station <- names(which(total_cor_stations == max(total_cor_stations), arr.ind = TRUE))
 
 ### Compute grid search
 grid_results <-  foreach (c = c_values, .combine = rbind)%:%
@@ -117,35 +105,22 @@ return(best);
 
 # Clusters using energy production in the Stations
 
-normSolar <- scale(data[, ..stationsNames])
-normSolar_transpose <- as.data.frame(t(as.matrix(normSolar)))
+data_scaled <- scale(data[, ..stationsNames])
+data_transpose <- as.data.frame(t(as.matrix(data_scaled)))
 
-# Perform a number of clusters K = 20
-totalwss <- c()
-for (k in 1:20){
-  result <- kmeans(normSolar_transpose, k)  
-  totalwss <- c(totalwss, result$tot.withinss)
-}
+sim_matrix <- negDistMat(data_transpose, r=2)
+dim(sim_matrix)
+ap_result <- apcluster(sim_matrix)
 
-#Plot to decide the optimum number of clusters 
-plot(totalwss[1:15], type = "line")
-
-# Appliying the elbow rule
-numcl <- 8
-
-#Perform final clustering with the optimum number k
-
-cl_ene <- kmeans(normSolar_transpose, numcl);
-
-ggplot(stations, aes(y = nlat, x = elon)) + 
-  geom_point(color = factor(cl_ene$cluster), size = 3) +
-  geom_text(label = stations$stid, size = 4);
-
-#Extract the clusters results to a list
+#Extract the clusters to a list
 clusters <- list()
-for (i in 1:numcl){
-  clusters[[i]] <- names(cl_ene$cluster)[cl_ene$cluster == i]
+for (i in 1:length(ap_result@clusters)){
+  clusters[[i]] <- names(ap_result@clusters[[i]])
 }
+
+#Extract each exemplar as base_station to grid search
+
+base_stations <- as.list(names(ap_result@exemplars))
 
 ############################### 4) TRAIN THE  MODEL #################################
 
@@ -161,22 +136,19 @@ predictors <- foreach(cluster = clusters, .packages = c("caret", "data.table"))%
    names(pc)[1:length(pc) -1]; #Discart last predictor to avoid overfit
 }
  
-#Add month as an additional predictor
-predictors <- sapply(predictors, append, "month")
-
 # Hyperparameters optimization per cluster
 
 hyperparameters <- foreach(cluster = 1:length(clusters), 
                            .packages = c("e1071", "data.table", "foreach", "doParallel"))%dopar%{
-  grid_search(clusters[[cluster]], predictors[[cluster]]);
+  grid_search(clusters[[cluster]], predictors[[cluster]], base_stations[[cluster]]);
 }
 
-#Train the model with the predictors and hyperparamenters of the cluster
 model_cluster_svm <-  foreach(cluster = 1:length(clusters), .combine = c)%:%
   foreach(station = clusters[[cluster]], .packages = c("e1071", "data.table"))%dopar%{
     
     predictors_cluster = predictors[[cluster]];
 
+  #Train the model with the predictors and hyperparamenters of the cluster
       svm(y = train[, ..station], x = train[, ..predictors_cluster], 
       data = train, 
       kernel="radial",
@@ -211,7 +183,7 @@ errors_test <- predictions_test - test[, ..stationsNames];
 
 #Compute Metric (MAE)
 
-mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2409812
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2424213
 
 
 ########################## 5) KAGGLE PREDICTIONS  #######################################
@@ -258,5 +230,5 @@ predictions_kaggle <- predictions_kaggle[, sort(colnames(predictions_kaggle))];
 submission <- data_predict[, Date:WYNO]
 as.data.table(predictions_kaggle) -> submission[, 2:99]
 
-write.csv(submission, file = "./files/submission_cluster_svm_20200519.csv", row.names = FALSE)
+write.csv(submission, file = "./files/submission_cluster_svm.csv", row.names = FALSE)
 
