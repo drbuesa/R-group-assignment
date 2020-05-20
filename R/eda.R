@@ -11,16 +11,17 @@ library(mice);
 library(outliers);
 library(caret);
 library(leaflet);
-library(maps)
-library(skimr)
-
+library(maps);
+library(skimr);
+library(psych);
+  
 #Load datasets 
 
-folder_path <- "./files/";
+folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/";
 
-data <- readRDS(file.path(folder_path, "solar_dataset.RData"));
-stations <- fread(file.path(folder_path, "station_info.csv"));
-additional_vars <- readRDS(file.path(folder_path, "additional_variables.RData"));
+data <- readRDS(file.path(folder_path, "./files/solar_dataset.RData"));
+stations <- fread(file.path(folder_path, "./files/station_info.csv"));
+additional_vars <- readRDS(file.path(folder_path, "./files/additional_variables.RData"));
 
 #Check datasets dimensions
 dim(data); 
@@ -169,25 +170,32 @@ sort(sapply(additional_vars[, -"Date"], function(x){100 * (sum(is.na(x)) + sum(x
 
 skim(additional_vars);
 
-################################# PROPOSAL TO DELETE FROM HERE TO BOTTON ######################################
+################################# ANNEX - ADDITIONAL ANALYSIS ################################
 
-#lets aim to fill up the missing values using Amelia package.
-missmap(additional_vars)
+#Fill up the missing values using Amelia package.
+missmap(additional_vars);
 
 # calling to amelia function; m=3, this parameter is the number of data set results generated through Amelia.
 #after Amelia is used we get 0% missing values.
 
-completed_data <- amelia(additional_vars, m=3, idvars = c("Date"));
+completed_data <- amelia(additional_vars[, -"Date"], m=3);
 
-#Amelia package recognizes that certain variablesV7834, V1353, V5706, V1386, V6394, V5673, V4266, V7865, V4953, V505,
-#V4234, V4233, V345, V6985, V1225, V2073, V1785, V1817, V377, V6137, V6825, V2074, V4697, V3977 are perfectly collinear
-#with another variable in the data. That said, these columns can be removed from vars (team to validate)
+#Amelia package recognizes that certain variablesare perfectly collinear
+#with another variable in the data. That said, these columns can be removed from vars
 
-vars_cleansed_amelia<- (completed_data$imputations$imp1 + completed_data$imputations$imp2+ completed_data$imputations$imp3)/3;
+vars_cleansed_amelia <- (completed_data$imputations$imp1 + completed_data$imputations$imp2 + completed_data$imputations$imp3)/3;
+
+exclude <- list("V7834", "V1353", "V5706", "V1386", "V6394", "V5673", "V4266", "V7865", 
+                "V4953", "V505", "V4234", "V4233", "V345", "V6985", "V1225", "V2073",
+                "V1785", "V1817", "V377", "V6137", "V6825", "V2074", "V4697", "V3977");
+
+vars_cleansed_amelia <- vars_cleansed_amelia[, -exclude, With = F]
+
 sum(is.na(vars_cleansed_amelia))
+
 missmap(vars_cleansed_amelia)
 
-#lets aim to fill up the missing values alternatively using Mice package.
+#Same can be done using Mice package
 results<- mice(additional_vars, m=3);
 vars_cleansed_mice <- (complete(results, 1) + complete(results, 2) + complete(results, 3))/3;
 as.numeric(sort(sapply(vars_cleansed_mice, function(x){100*(sum(is.na(x)))/length(x)}),decreasing = TRUE)[1]);
@@ -201,39 +209,24 @@ summary(vars_cleansed_amelia)
 
 outlier(vars_cleansed_amelia) #Q-Q plot of mahalanobis values versus the quantiles of the 100 columns from psych package
 
+
 install.packages("PerformanceAnalytics")
 library("PerformanceAnalytics")
 
 
 
-#calculation of mahalanobis 
-MD <- mahalanobis(vars_cleansed_amelia[, -"Date"], colMeans(vars_cleansed_amelia[, -"Date"]), cov(vars_cleansed_amelia[, -"Date"])) 
+#Calculation of mahalanobis 
+MD <- mahalanobis(vars_cleansed_amelia, colMeans(vars_cleansed_amelia), cov(vars_cleansed_amelia)) 
 
 alpha <- .001 #k degrees of freedom for chi-square computation to set cut-off score for outliers. We can adjust the alpha based on how many outliers we want to identify.
 cutoff <- (qchisq(p = 1 - alpha, df = ncol(vars_cleansed_amelia))) #cutoff score using chi-square
 outliers <- which(MD > cutoff) #identified outliers are 800 (11.5% of the dataset)
-excluded <- outliers #identified outliers to be excluded in the dataset (I have doubt if we need to exclude outliers. Option is to just scale the dataset.)
-vars_no_null_clean <- vars_no_null[-excluded, ]
-dim(vars_no_null_clean) #6,109 out of 6,909 have been retained (11.5% of the dataset were removed.)
 
-outlier(vars_no_null_clean) #checking Q-Q plot of mahalanobis values to see the improvement
+#Data Scaling - Subtracting mean and dividing by SD 
 
-boxplot(vars_no_null) #we can also check the boxplot of the original dataset with outliers
-boxplot(vars_no_null_clean) #versus the boxplot of the clean dataset without outliers
+vars_cleansed_amelia_scaled <- as.data.table(scale(vars_cleansed_amelia)) #Scaling the data with outliers.
 
-t(sapply(vars_no_null_clean, summary)) #performing EDA (basic stats) to the clean dataset without null values and without outliers
-
-###ADDISON EDA (Data Scaling - Subtracting mean and dividing by SD) 
-
-vars_no_null_scaled <- as.data.frame(scale(vars_no_null)) #Scaling the data with outliers.
-vars_no_null_clean_scaled <- as.data.frame(scale(vars_no_null_clean)) #Scaling the data without outliers. Option if we remove outliers.
-
-boxplot(vars_no_null_scaled) 
-boxplot(vars_no_null_clean_scaled) #option if we decide to remove outliers.
-
-
-
-# Function for removal of redundant variables from dataset
+#Function for removal of redundant variables from dataset
 remove_redundant <- function(correlations,redundant_threshold){
   redundancy<-apply(correlations,2,function(x){which(x>redundant_threshold)});
   redundancy<-redundancy[which(sapply(redundancy,length)>1)]
@@ -247,25 +240,14 @@ remove_redundant <- function(correlations,redundant_threshold){
   return(redundant_variables);
 } 
 
-remove_irrelevant<-function(correlations,irrelevant_threshold, target){
-  index <- which(target == colnames(correlations));
-  
-  #Function for removal of irrelevant variables from dataset
-  relevance<-correlations[index,-index];
-  irrelevant_variables<-names(relevance)[is.na(relevance) | relevance<irrelevant_threshold];
-  return(irrelevant_variables);
-}
+#Remove redundant variables
+cors <- abs(cor(vars_cleansed_amelia_scaled));
+redundant_threshold <- 0.9
 
-#Usage of the functions
-cors <- abs(cor(vars_cleansed_mice));
-target <- "#we need to specify the target variable"; ##VANIA - I don't understand the idea here
+redundant_vars <- remove_redundant(cors, redundant_threshold);
+additional_vars_clean <- vars_cleansed_amelia_scaled[, -redundant_vars, with= F]
 
-redundant_vars <- remove_redundant(cors, 0.9);
-vars_cleansed_mice[, -redundant_vars, with= F]
-
-irrelevant_vars <- remove_irrelevant(cors, 0.5, target);
-vars_cleansed_mice[, -irrelevant_vars, with= F]
-
-
-
-
+important_add_vars <- sapply(data[, ..stationsNames], select_important, n_vars = 20, dat = additional_vars_clean[1:5113, V6409:V3977]);
+table(important_add_vars);
+sort(table(important_add_vars), decreasing = T)
+predictors_add <- names(sort(table(important_add_vars), decreasing = T))[1:14]
