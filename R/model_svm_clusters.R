@@ -1,4 +1,4 @@
-######################### 1) LOAD DATA INTO MEMORY #################################
+######################### 0) LOAD DATA AND FUNCTIONS INTO MEMORY #################################
 
 library(data.table);
 library(caret);
@@ -6,14 +6,16 @@ library(ggplot2);
 library(foreach);
 library(doParallel);
 
+folder_path <- "/Users/drodriguez45/Documents/GitHub/R-group-assignment/";
+
+#Load functions
+
+source(file.path(folder_path, "./R/auxiliary_functions.R"));
 
 #Load datasets 
 
-
-folder_path <- "./files/";
-
-data_original <- readRDS(file.path(folder_path, "solar_dataset.RData"));
-stations <- fread(file.path(folder_path, "station_info.csv"));
+data_original <- readRDS(file.path(folder_path, "./files/solar_dataset.RData"));
+stations <- fread(file.path(folder_path, "./files/station_info.csv"));
 
 dim(data_original)
 dim(stations)
@@ -22,17 +24,28 @@ colnames(data)[1] ### Date
 stationsNames <- colnames(data_original)[2:99] ### Station names
 colnames(data)[100:456] ### Principal components
 
+######################### 1) DATA PREPARATION #################################
+
+#Add month of year as a new dummy variable (onehot encoding)
+
+month <- as.numeric(sapply(data_original$Date, substr, 5,6))
+onehot_month <- onehot(month, remove_last = F);
+months_of_year <- c("jan", "feb", "mar", "apr", "may", "jun",
+                    "jul", "ago", "sep", "oct", "nov", "dec");
+colnames(onehot_month) <- months_of_year
+
+#Keep PC1 to PC110 an scale the data
+
+data_prepared <- cbind(data_original[, Date:WYNO], 
+                       onehot_month,
+                       scale(data_original[, PC1:PC110]));
 
 #Check last row with information 5113
-which(data$Date == '20071231'); 
+which(data_prepared$Date == '20071231'); 
 
-#Add month of year as a new column and retain until PC110
-data_original <- cbind(data_original[, Date:WYNO], 
-                       month = as.numeric(sapply(data_original$Date, substr, 5,6)),
-                       data_original[, PC1:PC110]);
 
 #Remove NA rows to be predicted
-data <- data_original[1:5113,] 
+data <- data_prepared[1:5113,] ;
 
 # Set seed to get reproducible results
 
@@ -52,68 +65,9 @@ train <- data[train_index];
 val <- data[val_index]; 
 test  <- data[test_index];
 
-######################### 2) DEFINITION OF FUNCTIONS ##########################################
 
-# Select important variables 
 
-select_important<-function(y, n_vars, dat){
-  varimp <- filterVarImp(x = dat, y=y, nonpara=TRUE);
-  varimp <- data.table(variable=rownames(varimp),imp=varimp[, 1]);
-  varimp <- varimp[order(-imp)];
-  selected <- varimp$variable[1:n_vars];
-  return(selected);
-}
-
-# Grid Search Clusters SVM 
-
-grid_search <- function(cluster, predictors,
-                        c_values = 10^seq(from = 1, to = 3, by = 0.5),
-                        eps_values = 10^seq(from = -2, to = 0, by = 0.5), 
-                        gamma_values = 10^seq(from = -5, to = -3, by = 0.5)){
-
-# Select the base_station as the most correlated one in the cluster
-total_cor_stations <- colSums(cor(train[, ..cluster]))
-base_station <- names(which(total_cor_stations == max(total_cor_stations), arr.ind = TRUE))
-
-### Compute grid search
-grid_results <-  foreach (c = c_values, .combine = rbind)%:%
-  foreach (eps = eps_values, .combine = rbind)%:%
-  foreach (gamma = gamma_values, .packages = c("e1071", "data.table"), .export = c("base_station", "predictors"), .combine = rbind)%dopar%{
-    print(sprintf("Start of c = %s - eps = %s - gamma = %s", c, eps, gamma));
-    
-    # train SVM model with a particular set of hyperparamets
-    model <- svm(y = train[, ..base_station], x = train[, ..predictors], 
-                 data = train, 
-                 kernel="radial",
-                 cost = c, epsilon = eps, gamma = gamma);
-    
-    # Get model predictions
-    predictions_train <- predict(model, newdata = train[, ..predictors]);
-    predictions_val <- predict(model, newdata = val[, ..predictors]);
-    
-    # Get errors
-    errors_train <- predictions_train - train[, ..base_station];
-    errors_val <- predictions_val - val[, ..base_station];
-    
-    # Compute Metrics
-    mae_train <- round(mean(as.matrix(abs(errors_train))), 5);
-    mae_val <- round(mean(as.matrix(abs(errors_val))), 5);
-    
-    # Build comparison table
-    data.table(c = c, eps = eps, gamma = gamma, 
-               mae_train = mae_train,
-               mae_val = mae_val);
-  }
-
-# Order results by increasing mae
-grid_results <- grid_results[order(mae_val, mae_train)];
-
-# Check results
-best <- grid_results[1];
-return(best);
-}
-
-######################### 3) CLUSTERING OF STATIONS #####################################
+######################### 2) CLUSTERING OF STATIONS #####################################
 
 # Clusters using energy production in the Stations
 
@@ -147,7 +101,7 @@ for (i in 1:numcl){
   clusters[[i]] <- names(cl_ene$cluster)[cl_ene$cluster == i]
 }
 
-############################### 4) TRAIN THE  MODEL #################################
+############################### 3) TRAIN THE  MODEL #################################
 
 # Start cluster
 stopImplicitCluster();
@@ -161,8 +115,8 @@ predictors <- foreach(cluster = clusters, .packages = c("caret", "data.table"))%
    names(pc)[1:length(pc) -1]; #Discart last predictor to avoid overfit
 }
  
-#Add month as an additional predictor
-predictors <- sapply(predictors, append, "month")
+#Add months as additional predictors
+predictors <- sapply(predictors, append, months_of_year);
 
 # Hyperparameters optimization per cluster
 
@@ -211,7 +165,7 @@ errors_test <- predictions_test - test[, ..stationsNames];
 
 #Compute Metric (MAE)
 
-mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2409812
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2391355
 
 
 ########################## 5) KAGGLE PREDICTIONS  #######################################
@@ -235,7 +189,7 @@ names(model) <- unlist(clusters);
 
 
 #Build the summision
-data_predict <- data_original[5114:6909,]
+data_predict <- data_prepared[5114:6909,]
 dim(data_predict)
 
 #Get model predictions for multiple models (ST approach)
@@ -258,5 +212,5 @@ predictions_kaggle <- predictions_kaggle[, sort(colnames(predictions_kaggle))];
 submission <- data_predict[, Date:WYNO]
 as.data.table(predictions_kaggle) -> submission[, 2:99]
 
-write.csv(submission, file = "./files/submission_cluster_svm_20200519.csv", row.names = FALSE)
+write.csv(submission, file = "./files/submission_cluster_svm_20200520.csv", row.names = FALSE)
 
