@@ -250,4 +250,4 @@ additional_vars_clean <- vars_cleansed_amelia_scaled[, -redundant_vars, with= F]
 important_add_vars <- sapply(data[, ..stationsNames], select_important, n_vars = 20, dat = additional_vars_clean[1:5113, V6409:V3977]);
 table(important_add_vars);
 sort(table(important_add_vars), decreasing = T)
-predictors_add <- names(sort(table(important_add_vars), decreasing = T))[1:14]
+predictors_add <- names(sort(table(important_add_vars), decreasing = T))[1:5]

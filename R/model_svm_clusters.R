@@ -16,6 +16,7 @@ source(file.path(folder_path, "./R/auxiliary_functions.R"));
 
 data_original <- readRDS(file.path(folder_path, "./files/solar_dataset.RData"));
 stations <- fread(file.path(folder_path, "./files/station_info.csv"));
+additional_vars_clean <- readRDS(file.path(folder_path, "./files/additional_variables_clean.RData"));
 
 dim(data_original)
 dim(stations)
@@ -34,18 +35,19 @@ months_of_year <- c("jan", "feb", "mar", "apr", "may", "jun",
                     "jul", "ago", "sep", "oct", "nov", "dec");
 colnames(onehot_month) <- months_of_year
 
-#Keep PC1 to PC110 an scale the data
+#Keep PC1 to PC110 an scale the data, include additional variables 
 
 data_prepared <- cbind(data_original[, Date:WYNO], 
                        onehot_month,
-                       scale(data_original[, PC1:PC110]));
+                       scale(data_original[, PC1:PC110]), additional_vars_clean);
 
 #Check last row with information 5113
 which(data_prepared$Date == '20071231'); 
 
 
 #Remove NA rows to be predicted
-data <- data_prepared[1:5113,] ;
+data <- data_prepared[1:5113,];
+
 
 # Set seed to get reproducible results
 
@@ -118,6 +120,9 @@ predictors <- foreach(cluster = clusters, .packages = c("caret", "data.table"))%
 #Add months as additional predictors
 predictors <- sapply(predictors, append, months_of_year);
 
+#Add additional predictors from additional variables data preparation phase (EDA)
+predictors <- sapply(predictors, append, predictors_add);
+
 # Hyperparameters optimization per cluster
 
 hyperparameters <- foreach(cluster = 1:length(clusters), 
@@ -165,7 +170,7 @@ errors_test <- predictions_test - test[, ..stationsNames];
 
 #Compute Metric (MAE)
 
-mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2391355
+mae_test <- round(mean(as.matrix(abs(errors_test))), 5); #2358701
 
 
 ########################## 5) KAGGLE PREDICTIONS  #######################################
@@ -212,5 +217,5 @@ predictions_kaggle <- predictions_kaggle[, sort(colnames(predictions_kaggle))];
 submission <- data_predict[, Date:WYNO]
 as.data.table(predictions_kaggle) -> submission[, 2:99]
 
-write.csv(submission, file = "./files/submission_cluster_svm_20200520.csv", row.names = FALSE)
+write.csv(submission, file = "./files/submission_cluster_svm_20200521.csv", row.names = FALSE)
 
