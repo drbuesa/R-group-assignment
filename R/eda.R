@@ -131,7 +131,7 @@ constant_variables <- function(x, threshold=0.9){
   return(accepted)
 }
 
-constant_variables(data);
+constant_variables(data[,  ..stationsNames]);
 constant_variables(stations);
 constant_variables(additional_vars);
 

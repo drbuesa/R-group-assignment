@@ -76,7 +76,7 @@ test  <- data[test_index];
 normSolar <- scale(data[, ..stationsNames])
 normSolar_transpose <- as.data.frame(t(as.matrix(normSolar)))
 
-# Perform a number of clusters K = 20
+# Perform clutering using K between 1 and 20
 totalwss <- c()
 for (k in 1:20){
   result <- kmeans(normSolar_transpose, k)  
@@ -86,7 +86,7 @@ for (k in 1:20){
 #Plot to decide the optimum number of clusters 
 plot(totalwss[1:15], type = "line")
 
-# Appliying the elbow rule
+# Applying the elbow rule
 numcl <- 8
 
 #Perform final clustering with the optimum number k
